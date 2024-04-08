@@ -96,7 +96,7 @@
 
 <style>
   .chart-container {
-    /* max-width: 1000px; */
+    max-width: 1000px;
     max-height: 1000px;
     font-size: 0.7rem;
     position: relative;
