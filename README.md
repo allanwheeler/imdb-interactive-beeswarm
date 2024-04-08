@@ -4,7 +4,7 @@ This is a simple interactive beeswarm plot for the TV series Frasier. It shows t
 
 ![CleanShot 2024-04-07 at 19 53 26](https://github.com/allanwheeler/imdb-interactive-beeswarm/assets/54455196/e75ea178-a6df-474a-87a1-ce6dd30db0d0)
 
-[Connor Rothschild's  barebones starter template for making data visualizations with Svelte + D3.](https://github.com/allanwheeler/svelte-visualization-template) served as the base for this project to work from. 
+[Connor Rothschild's  barebones starter template for making data visualizations with Svelte + D3](https://github.com/allanwheeler/svelte-visualization-template) served as the base for this project to work from. 
 
 ## Getting started
 
