@@ -1,4 +1,4 @@
-![beeswarm-demo-2024-08-14](https://github.com/user-attachments/assets/b516a6c1-1b4f-4214-89be-fca0702590db)# Interactive beeswarm plot for series Frasier
+# Interactive beeswarm plot for series Frasier
 
 This is a simple interactive beeswarm plot for the TV series Frasier. It shows the average audience rating for each episode of the series. The plot is interactive and allows the user to separate episodes by seasons and hover over each episode to see the episode title and the rating.
 
