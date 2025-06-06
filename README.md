@@ -4,8 +4,6 @@ This is a simple interactive beeswarm plot for the TV series Frasier. It shows t
 
 ![beeswarm-demo-2024-08-14](https://github.com/user-attachments/assets/19942434-d93d-4605-b063-e009953a217d)
 
-[Connor Rothschild's  barebones starter template for making data visualizations with Svelte + D3](https://github.com/allanwheeler/svelte-visualization-template) served as the base for this project to work from. 
-
 ## Getting started
 
 ### 1. Install dependencies
@@ -15,3 +13,6 @@ Run `npm install` or `pnpm install` to install the dependencies.
 ### 2. Start the development server
 
 Run `npm run dev` to start the development server.
+
+---
+[Thanks to Connor Rothschild's Svelte + D3 barebones starter](https://github.com/allanwheeler/svelte-visualization-template) which served as a base to work from.
