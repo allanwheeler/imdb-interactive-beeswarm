@@ -15,4 +15,4 @@ Run `npm install` or `pnpm install` to install the dependencies.
 Run `npm run dev` to start the development server.
 
 ---
-[Thanks to Connor Rothschild's Svelte + D3 barebones starter](https://github.com/allanwheeler/svelte-visualization-template) which served as a base to work from.
+Thanks to Connor Rothschild's [Svelte + D3 barebones starter](https://github.com/allanwheeler/svelte-visualization-template) which served as a base to work from.
