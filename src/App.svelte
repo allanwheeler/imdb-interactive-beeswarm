@@ -63,7 +63,9 @@
 </script>
 
 <h2>Average episode ratings for the series Frasier</h2>
-<p style="margin: 0; font-size: 0.875rem;">Click to view by season</p>
+<p style="margin: 0; font-size: 0.875rem;">
+  Click on plot to view {!groupBySeason ? 'by season' : 'all episodes'}
+</p>
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
   role="button"
