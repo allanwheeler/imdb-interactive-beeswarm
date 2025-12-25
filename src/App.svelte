@@ -1,4 +1,6 @@
 <script>
+  import { run } from 'svelte/legacy';
+
   import { forceSimulation, forceX, forceY, forceCollide } from 'd3-force';
   import { scaleLinear, scaleBand, scaleOrdinal, scaleSqrt } from 'd3-scale';
   import data from './data/data.js';
@@ -6,25 +8,24 @@
   import AxisY from './components/AxisY.svelte';
   import Tooltip from './components/Tooltip.svelte';
 
-  let width = 400;
+  let width = $state(400);
   let height = 600;
 
   const margin = { top: 0, right: 50, left: 30, bottom: 20 };
 
-  $: innerWidth = width - margin.left - margin.right;
+  let innerWidth = $derived(width - margin.left - margin.right);
   let innerHeight = height - margin.top - margin.bottom;
 
   let seasons = Array.from(new Set(data.map(d => d.season)));
 
-  $: xScale = scaleLinear().domain([6.5, 10]).range([0, innerWidth]);
-  $: yScale = scaleBand()
-    .domain(seasons)
-    .range([0, innerHeight])
-    .paddingOuter(0.5);
+  let xScale = $derived(scaleLinear().domain([6.5, 10]).range([0, innerWidth]));
+  let yScale = $derived(
+    scaleBand().domain(seasons).range([0, innerHeight]).paddingOuter(0.5)
+  );
 
   let simulation = forceSimulation(data);
-  let nodes = [];
-  let tickCount = 0;
+  let nodes = $state([]);
+  let tickCount = $state(0);
   const maxTicks = 200; // Set this to your desired number of ticks
 
   simulation.on('tick', () => {
@@ -35,9 +36,9 @@
     }
   });
 
-  let groupBySeason = false;
+  let groupBySeason = $state(false);
 
-  $: {
+  run(() => {
     tickCount = 0; // Reset tick count when forces change
     simulation
       .force(
@@ -56,20 +57,20 @@
       .alpha(0.1)
       .alphaDecay(0.00000000002)
       .restart();
-  }
+  });
 
-  let hovered;
+  let hovered = $state();
 </script>
 
 <h2>Average episode ratings for the series Frasier</h2>
 <p style="margin: 0; font-size: 0.875rem;">Click to view by season</p>
-<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
   role="button"
   tabindex="0"
   class="chart-container"
   bind:clientWidth={width}
-  on:click={() => (groupBySeason = !groupBySeason)}
+  onclick={() => (groupBySeason = !groupBySeason)}
 >
   <svg {width} {height}>
     <g class="inner-chart" transform="translate({margin.left}, {margin.top})">
@@ -85,12 +86,12 @@
           fill={hovered === node ? 'orange' : '#f4f4f4'}
           stroke={'#555'}
           stroke-width={0.5}
-          on:mouseover={() => (hovered = node)}
-          on:focus={() => (hovered = node)}
-          on:click={event => {
+          onmouseover={() => (hovered = node)}
+          onfocus={() => (hovered = node)}
+          onclick={event => {
             event.stopImmediatePropagation();
           }}
-          on:mouseleave={() => (hovered = null)}
+          onmouseleave={() => (hovered = null)}
         />
       {/each}
     </g>
@@ -109,6 +110,11 @@
     font-size: 0.7rem;
     position: relative;
     height: 95vh;
+    user-select: none;
+    /* For Safari */
+    -webkit-user-select: none;
+    /* For Firefox */
+    -moz-user-select: none;
   }
 
   h2 {

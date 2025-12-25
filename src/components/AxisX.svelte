@@ -1,9 +1,8 @@
 <script>
-  export let xScale;
-  export let width;
-  export let height;
+  /** @type {{xScale: any, width: any, height: any}} */
+  let { xScale, width, height } = $props();
 
-  $: ticks = xScale.ticks(4);
+  let ticks = $derived(xScale.ticks(4));
 </script>
 
 <g class="axis x">

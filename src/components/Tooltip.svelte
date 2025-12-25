@@ -1,11 +1,12 @@
 <script>
-	export let data;
+	/** @type {{data: any}} */
+	let { data } = $props();
 	// export let width;
 
-	let tooltipWidth;
+	let tooltipWidth = $state();
 
-	$: xPosition = data.x + 40
-	$: yPosition = data.y - 10
+	let xPosition = $derived(data.x + 40)
+	let yPosition = $derived(data.y - 10)
 
 </script>
 

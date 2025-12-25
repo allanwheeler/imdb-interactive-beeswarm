@@ -1,12 +1,12 @@
 <script>
-	export let yScale;
-	export let groupBySeason;
 
-	$: ticks = yScale.domain()
 
 	import { fade } from "svelte/transition"
 	import { fly } from "svelte/transition"
+	/** @type {{yScale: any, groupBySeason: any}} */
+	let { yScale, groupBySeason } = $props();
 
+	let ticks = $derived(yScale.domain())
 </script>
 
 <g class="axis-y">
