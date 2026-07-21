@@ -10,7 +10,14 @@
   import Tooltip from './components/Tooltip.svelte';
 
   let width = $state(400);
-  let height = $derived(Math.min(600, Math.max(420, Math.round(width * 0.75))));
+  let viewportHeight = $state(0);
+  let height = $derived(
+    width < 600 && viewportHeight
+      ? Math.max(420, Math.round(viewportHeight * 0.88))
+      : Math.min(600, Math.max(420, Math.round(width * 0.75))),
+  );
+  let pointRadius = $derived(width < 480 ? 4 : 5);
+  let collisionRadius = $derived(pointRadius + 2);
 
   const margin = { top: 0, right: 50, left: 30, bottom: 20 };
 
@@ -23,7 +30,6 @@
   const MOTION = {
     duration: 300,
     layoutTicks: 300,
-    collisionRadius: 7,
     gridPadding: 32,
   };
   const INTERACTION = {
@@ -70,7 +76,7 @@
           .y(d => (grouped ? currentYScale(d.season) : innerHeight / 2))
           .strength(0.5),
       )
-      .force('collide', forceCollide().radius(MOTION.collisionRadius))
+      .force('collide', forceCollide().radius(collisionRadius))
       .stop()
       .tick(MOTION.layoutTicks);
 
@@ -216,11 +222,22 @@
     const updateMotionPreference = () => {
       prefersReducedMotion = motionPreference.matches;
     };
+    const viewport = window.visualViewport;
+    const updateViewportHeight = () => {
+      viewportHeight = viewport?.height ?? window.innerHeight;
+    };
 
     updateMotionPreference();
+    updateViewportHeight();
     motionPreference.addEventListener('change', updateMotionPreference);
-    return () =>
+    window.addEventListener('resize', updateViewportHeight);
+    viewport?.addEventListener('resize', updateViewportHeight);
+
+    return () => {
       motionPreference.removeEventListener('change', updateMotionPreference);
+      window.removeEventListener('resize', updateViewportHeight);
+      viewport?.removeEventListener('resize', updateViewportHeight);
+    };
   });
 
   onDestroy(() => cancelAnimationFrame(animationFrame));
@@ -265,7 +282,7 @@
             aria-hidden="true"
             cx={node.x}
             cy={node.y}
-            r={5}
+            r={pointRadius}
             fill={activeIndex === i ? 'orange' : '#f4f4f4'}
             stroke={'#555'}
             stroke-width={0.5}
