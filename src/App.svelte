@@ -175,6 +175,7 @@
     }
 
     event.preventDefault();
+    hoveredIndex = undefined;
     selectedIndex = nextIndex;
   }
 
@@ -270,6 +271,7 @@
     class="chart-container"
     aria-label="Episode ratings chart. Use arrow keys to explore episodes."
     bind:clientWidth={width}
+    onfocus={() => (hoveredIndex = undefined)}
     onkeydown={handleChartKeydown}
   >
     <svg {width} {height}>
