@@ -24,6 +24,7 @@
     duration: 300,
     layoutTicks: 300,
     collisionRadius: 7,
+    gridPadding: 32,
   };
   const INTERACTION = {
     hitRadius: 24,
@@ -40,6 +41,8 @@
   );
 
   let nodes = $state([]);
+  let gridTop = $state(0);
+  let gridBottom = $state(0);
   let groupBySeason = $state(false);
   let layouts = $state();
   let hoveredIndex = $state();
@@ -49,7 +52,10 @@
   let prefersReducedMotion = false;
 
   function calculateLayout(grouped, currentXScale, currentYScale) {
-    const layoutNodes = data.map((datum, index) => ({ ...datum, layoutIndex: index }));
+    const layoutNodes = data.map((datum, index) => ({
+      ...datum,
+      layoutIndex: index,
+    }));
 
     forceSimulation(layoutNodes)
       .force(
@@ -71,15 +77,24 @@
     return layoutNodes;
   }
 
-  function animateTo(targetNodes) {
+  function animateTo(targetLayout) {
     cancelAnimationFrame(animationFrame);
+    const {
+      nodes: targetNodes,
+      gridTop: targetGridTop,
+      gridBottom: targetGridBottom,
+    } = targetLayout;
 
     if (nodes.length === 0 || prefersReducedMotion) {
       nodes = targetNodes;
+      gridTop = targetGridTop;
+      gridBottom = targetGridBottom;
       return;
     }
 
     const startNodes = nodes.map(node => ({ x: node.x, y: node.y }));
+    const startGridTop = gridTop;
+    const startGridBottom = gridBottom;
     const startTime = performance.now();
 
     function frame(time) {
@@ -88,9 +103,16 @@
 
       nodes = targetNodes.map((target, index) => ({
         ...target,
-        x: startNodes[index].x + (target.x - startNodes[index].x) * easedProgress,
-        y: startNodes[index].y + (target.y - startNodes[index].y) * easedProgress,
+        x:
+          startNodes[index].x +
+          (target.x - startNodes[index].x) * easedProgress,
+        y:
+          startNodes[index].y +
+          (target.y - startNodes[index].y) * easedProgress,
       }));
+      gridTop = startGridTop + (targetGridTop - startGridTop) * easedProgress;
+      gridBottom =
+        startGridBottom + (targetGridBottom - startGridBottom) * easedProgress;
 
       if (progress < 1) animationFrame = requestAnimationFrame(frame);
     }
@@ -100,13 +122,16 @@
 
   function findNearestNode(event) {
     const bounds = event.currentTarget.getBoundingClientRect();
-    const pointerX = ((event.clientX - bounds.left) / bounds.width) * innerWidth;
-    const pointerY = ((event.clientY - bounds.top) / bounds.height) * innerHeight;
+    const pointerX =
+      ((event.clientX - bounds.left) / bounds.width) * innerWidth;
+    const pointerY =
+      ((event.clientY - bounds.top) / bounds.height) * innerHeight;
     let nearestIndex;
     let nearestDistanceSquared = INTERACTION.hitRadius ** 2;
 
     nodes.forEach((node, index) => {
-      const distanceSquared = (node.x - pointerX) ** 2 + (node.y - pointerY) ** 2;
+      const distanceSquared =
+        (node.x - pointerX) ** 2 + (node.y - pointerY) ** 2;
       if (distanceSquared < nearestDistanceSquared) {
         nearestDistanceSquared = distanceSquared;
         nearestIndex = index;
@@ -150,27 +175,52 @@
   $effect(() => {
     const currentXScale = xScale;
     const currentYScale = yScale;
+    const combinedNodes = calculateLayout(false, currentXScale, currentYScale);
+    const groupedNodes = calculateLayout(true, currentXScale, currentYScale);
+    const combinedOffset =
+      MOTION.gridPadding - Math.min(...combinedNodes.map(node => node.y));
+
+    combinedNodes.forEach(node => {
+      node.y += combinedOffset;
+    });
+
+    const combinedYValues = combinedNodes.map(node => node.y);
+    const groupedYValues = groupedNodes.map(node => node.y);
 
     layouts = {
-      combined: calculateLayout(false, currentXScale, currentYScale),
-      grouped: calculateLayout(true, currentXScale, currentYScale),
+      combined: {
+        nodes: combinedNodes,
+        gridTop: Math.max(0, Math.min(...combinedYValues) - MOTION.gridPadding),
+        gridBottom: Math.min(
+          innerHeight,
+          Math.max(...combinedYValues) + MOTION.gridPadding,
+        ),
+      },
+      grouped: {
+        nodes: groupedNodes,
+        gridTop: Math.max(0, Math.min(...groupedYValues) + 32),
+        gridBottom: Math.min(innerHeight, Math.max(...groupedYValues) + 56),
+      },
     };
   });
 
   $effect(() => {
-    const targetNodes = groupBySeason ? layouts?.grouped : layouts?.combined;
-    if (targetNodes) untrack(() => animateTo(targetNodes));
+    const targetLayout = groupBySeason ? layouts?.grouped : layouts?.combined;
+    if (targetLayout) untrack(() => animateTo(targetLayout));
   });
 
   onMount(() => {
-    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const motionPreference = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    );
     const updateMotionPreference = () => {
       prefersReducedMotion = motionPreference.matches;
     };
 
     updateMotionPreference();
     motionPreference.addEventListener('change', updateMotionPreference);
-    return () => motionPreference.removeEventListener('change', updateMotionPreference);
+    return () =>
+      motionPreference.removeEventListener('change', updateMotionPreference);
   });
 
   onDestroy(() => cancelAnimationFrame(animationFrame));
@@ -192,7 +242,9 @@
       onclick={() => (groupBySeason = true)}>By season</button
     >
   </div>
-  <p class="instructions">Tap a point for episode details. Use arrow keys when the chart is focused.</p>
+  <p class="instructions">
+    Tap a point for episode details. Use arrow keys when the chart is focused.
+  </p>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
@@ -206,7 +258,7 @@
     <svg {width} {height}>
       <g class="inner-chart" transform="translate({margin.left}, {margin.top})">
         <AxisY {yScale} {groupBySeason} />
-        <AxisX {xScale} height={innerHeight} width={innerWidth} />
+        <AxisX {xScale} {gridTop} {gridBottom} />
         {#each nodes as node, i (node.layoutIndex)}
           <circle
             class="data-point"
@@ -242,7 +294,12 @@
         chartHeight={height}
       />
     {/if}
-    <p class="source">Source: IMDb</p>
+    <p
+      class="source"
+      style="top:{gridBottom + margin.top + 22}px; left:{margin.left}px;"
+    >
+      Source: IMDb
+    </p>
   </div>
 </main>
 
@@ -307,6 +364,11 @@
     color: #555;
     font-size: 0.875rem;
     line-height: 1.4;
+  }
+
+  .source {
+    position: absolute;
+    margin: 0;
   }
 
   .data-point {
