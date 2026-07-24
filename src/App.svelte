@@ -373,6 +373,16 @@
           motionDuration={prefersReducedMotion ? 0 : MOTION.duration}
         />
         <AxisX {xScale} {gridTop} {gridBottom} {seriesAverage} />
+        {#each nodes as node, i (node.layoutIndex)}
+          <circle
+            class="data-point"
+            class:hovered={hoveredIndex === i}
+            class:selected={selectedIndex === i}
+            cx={node.x}
+            cy={node.y}
+            r={pointRadius}
+          />
+        {/each}
         {#if comparisonRoute}
           {#key `${selectedIndex}-${groupBySeason}`}
             <path
@@ -387,16 +397,6 @@
             />
           {/key}
         {/if}
-        {#each nodes as node, i (node.layoutIndex)}
-          <circle
-            class="data-point"
-            class:hovered={hoveredIndex === i}
-            class:selected={selectedIndex === i}
-            cx={node.x}
-            cy={node.y}
-            r={pointRadius}
-          />
-        {/each}
         {#if
           groupBySeason &&
           selectedIndex !== undefined &&
