@@ -49,6 +49,7 @@
   let nodes = $state([]);
   let gridTop = $state(0);
   let gridBottom = $state(0);
+  let viewIndicatorPosition = $state(0);
   let groupBySeason = $state(false);
   let layouts = $state();
   let hoveredIndex = $state();
@@ -89,18 +90,21 @@
       nodes: targetNodes,
       gridTop: targetGridTop,
       gridBottom: targetGridBottom,
+      viewIndicatorPosition: targetViewIndicatorPosition,
     } = targetLayout;
 
     if (nodes.length === 0 || prefersReducedMotion) {
       nodes = targetNodes;
       gridTop = targetGridTop;
       gridBottom = targetGridBottom;
+      viewIndicatorPosition = targetViewIndicatorPosition;
       return;
     }
 
     const startNodes = nodes.map(node => ({ x: node.x, y: node.y }));
     const startGridTop = gridTop;
     const startGridBottom = gridBottom;
+    const startViewIndicatorPosition = viewIndicatorPosition;
     const startTime = performance.now();
 
     function frame(time) {
@@ -119,6 +123,10 @@
       gridTop = startGridTop + (targetGridTop - startGridTop) * easedProgress;
       gridBottom =
         startGridBottom + (targetGridBottom - startGridBottom) * easedProgress;
+      viewIndicatorPosition =
+        startViewIndicatorPosition +
+        (targetViewIndicatorPosition - startViewIndicatorPosition) *
+          easedProgress;
 
       if (progress < 1) animationFrame = requestAnimationFrame(frame);
     }
@@ -197,6 +205,7 @@
     layouts = {
       combined: {
         nodes: combinedNodes,
+        viewIndicatorPosition: 0,
         gridTop: Math.max(0, Math.min(...combinedYValues) - MOTION.gridPadding),
         gridBottom: Math.min(
           innerHeight,
@@ -205,7 +214,8 @@
       },
       grouped: {
         nodes: groupedNodes,
-        gridTop: Math.max(0, Math.min(...groupedYValues) + 32),
+        viewIndicatorPosition: 1,
+        gridTop: Math.max(0, Math.min(...groupedYValues) - MOTION.gridPadding),
         gridBottom: Math.min(innerHeight, Math.max(...groupedYValues) + 56),
       },
     };
@@ -247,6 +257,11 @@
 <main class="project">
   <h2>Average episode ratings for the series Frasier</h2>
   <div class="view-controls" aria-label="Chart view">
+    <span
+      class="view-indicator"
+      aria-hidden="true"
+      style:transform="translateX({viewIndicatorPosition * 100}%)"
+    ></span>
     <button
       type="button"
       class:active={!groupBySeason}
@@ -261,7 +276,8 @@
     >
   </div>
   <p class="instructions">
-    Tap a point for episode details. Use arrow keys when the chart is focused.
+    Hover or tap a point for episode details. After selecting a point, use the
+    arrow keys to cycle through episodes chronologically.
   </p>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -346,15 +362,31 @@
   }
 
   .view-controls {
-    display: inline-flex;
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: repeat(2, 1fr);
     margin-top: 0.75rem;
     padding: 2px;
-    border: 1px solid #c8c8c8;
+    border: 1px solid rgb(200, 200, 200, 0.1);
     border-radius: 0.5rem;
     background: #f2f2f2;
   }
 
+  .view-indicator {
+    position: absolute;
+    z-index: 0;
+    inset: 2px auto 2px 2px;
+    width: calc(50% - 2px);
+    border-radius: 0.375rem;
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+    pointer-events: none;
+    will-change: transform;
+  }
+
   .view-controls button {
+    position: relative;
+    z-index: 1;
     min-height: 2rem;
     padding: 0.25rem 0.625rem;
     border: 0;
@@ -368,8 +400,6 @@
 
   .view-controls button.active {
     color: #111;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
   }
 
   .view-controls button:focus-visible,
@@ -380,7 +410,8 @@
 
   .instructions {
     margin-top: 0.625rem;
-    color: #555;
+    margin-bottom: 0.75rem;
+    color: #8a8a8a;
     font-size: 0.875rem;
     line-height: 1.4;
   }
