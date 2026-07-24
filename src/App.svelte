@@ -46,9 +46,7 @@
   };
 
   let innerWidth = $derived(width - margin.left - margin.right);
-  let innerHeight = $derived(
-    expandedChartHeight - margin.top - margin.bottom,
-  );
+  let innerHeight = $derived(expandedChartHeight - margin.top - margin.bottom);
 
   let seasons = Array.from(new Set(data.map(d => d.season)));
 
@@ -76,11 +74,7 @@
     ),
   );
   let comparisonRoute = $derived.by(() => {
-    if (
-      groupBySeason ||
-      selectedIndex === undefined ||
-      !nodes[selectedIndex]
-    ) {
+    if (groupBySeason || selectedIndex === undefined || !nodes[selectedIndex]) {
       return undefined;
     }
 
@@ -216,7 +210,7 @@
   function formatRatingDifference(rating) {
     const difference = rating - seriesAverage;
     const sign = difference > 0 ? '+' : difference < 0 ? '−' : '';
-    return `${sign}${Math.abs(difference).toFixed(1)} stars`;
+    return `${sign}${Math.abs(difference).toFixed(1)} difference`;
   }
 
   function describeRatingDifference(rating) {
@@ -334,10 +328,7 @@
   onDestroy(() => cancelAnimationFrame(animationFrame));
 </script>
 
-<main
-  class="project"
-  style:--feedback-duration="{MOTION.feedbackDuration}ms"
->
+<main class="project" style:--feedback-duration="{MOTION.feedbackDuration}ms">
   <h1 id="chart-title">Average episode ratings for the series Frasier</h1>
   <div class="view-controls" role="group" aria-label="Chart view">
     <span
@@ -381,17 +372,12 @@
           {groupBySeason}
           motionDuration={prefersReducedMotion ? 0 : MOTION.duration}
         />
-        <AxisX
-          {xScale}
-          {gridTop}
-          {gridBottom}
-          {seriesAverage}
-        />
+        <AxisX {xScale} {gridTop} {gridBottom} {seriesAverage} />
         {#if selectedIndex !== undefined && nodes[selectedIndex]}
           {#key `${selectedIndex}-${groupBySeason}`}
             {#if comparisonRoute}
               <path
-                class="selection-comparison-line elbow"
+                class="selection-comparison-line"
                 d={comparisonRoute.path}
                 in:draw={{
                   duration: prefersReducedMotion
@@ -442,9 +428,7 @@
               y={comparisonRoute?.labelY ??
                 nodes[selectedIndex].y - pointRadius - 7}
               in:fade={{
-                duration: prefersReducedMotion
-                  ? 0
-                  : MOTION.comparisonDuration,
+                duration: prefersReducedMotion ? 0 : MOTION.comparisonDuration,
                 easing: cubicOut,
               }}
               >{formatRatingDifference(
@@ -482,14 +466,14 @@
         Season {nodes[selectedIndex].season}, episode
         {nodes[selectedIndex].episode}: {nodes[selectedIndex].title},
         {nodes[selectedIndex].averageEpisodeRating} out of 10,
-        {describeRatingDifference(
-          nodes[selectedIndex].averageEpisodeRating,
-        )}.
+        {describeRatingDifference(nodes[selectedIndex].averageEpisodeRating)}.
       {/if}
     </p>
     <p
       class="source"
-      style="top:{gridBottom + margin.top + LAYOUT.sourceOffset}px; left:{margin.left}px;"
+      style="top:{gridBottom +
+        margin.top +
+        LAYOUT.sourceOffset}px; left:{margin.left}px;"
     >
       Source: IMDb
     </p>
@@ -550,7 +534,7 @@
   .view-controls button {
     position: relative;
     z-index: 1;
-    min-height: 2.75rem;
+    min-height: 2rem;
     padding: 0.25rem 0.625rem;
     border: 0;
     border-radius: 0.375rem;
@@ -614,16 +598,12 @@
   .selection-comparison-line {
     fill: none;
     stroke: var(--color-accent-strong);
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    pointer-events: none;
-  }
-
-  .selection-comparison-line.elbow {
     stroke-width: 1;
     stroke-dasharray: 3 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
     opacity: 0.55;
+    pointer-events: none;
   }
 
   .selection-comparison-label {
