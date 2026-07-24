@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, onMount, untrack } from 'svelte';
   import { cubicOut } from 'svelte/easing';
+  import { draw, fade } from 'svelte/transition';
 
   import { forceSimulation, forceX, forceY, forceCollide } from 'd3-force';
   import { scaleLinear, scaleBand } from 'd3-scale';
@@ -11,7 +12,7 @@
 
   let width = $state(400);
   let viewportHeight = $state(0);
-  let height = $derived(
+  let expandedChartHeight = $derived(
     width < 600 && viewportHeight
       ? Math.max(420, Math.round(viewportHeight * 0.88))
       : Math.min(600, Math.max(420, Math.round(width * 0.75))),
@@ -19,7 +20,8 @@
   let pointRadius = $derived(width < 480 ? 4 : 5);
   let collisionRadius = $derived(pointRadius + 2);
 
-  const margin = { top: 0, right: 50, left: 30, bottom: 20 };
+  const margin = { top: 24, right: 44, left: 64, bottom: 56 };
+  const seriesAverage = data[0].avgSeriesRating;
 
   /* ─────────────────────────────────────────────────────────
    * ANIMATION STORYBOARD
@@ -29,15 +31,24 @@
    * ───────────────────────────────────────────────────────── */
   const MOTION = {
     duration: 300,
+    feedbackDuration: 120,
+    comparisonDuration: 150,
     layoutTicks: 300,
     gridPadding: 32,
+  };
+  const LAYOUT = {
+    minimumCombinedHeight: 220,
+    sourceOffset: 38,
+    chartEndPadding: 18,
   };
   const INTERACTION = {
     hitRadius: 24,
   };
 
   let innerWidth = $derived(width - margin.left - margin.right);
-  let innerHeight = $derived(height - margin.top - margin.bottom);
+  let innerHeight = $derived(
+    expandedChartHeight - margin.top - margin.bottom,
+  );
 
   let seasons = Array.from(new Set(data.map(d => d.season)));
 
@@ -49,6 +60,7 @@
   let nodes = $state([]);
   let gridTop = $state(0);
   let gridBottom = $state(0);
+  let chartHeight = $state(0);
   let viewIndicatorPosition = $state(0);
   let groupBySeason = $state(false);
   let layouts = $state();
@@ -56,7 +68,35 @@
   let selectedIndex = $state();
   let activeIndex = $derived(hoveredIndex ?? selectedIndex);
   let animationFrame;
-  let prefersReducedMotion = false;
+  let prefersReducedMotion = $state(false);
+  let interactionHeight = $derived(
+    Math.min(
+      innerHeight,
+      Math.max(gridBottom, chartHeight - margin.top - margin.bottom),
+    ),
+  );
+  let comparisonRoute = $derived.by(() => {
+    if (
+      groupBySeason ||
+      selectedIndex === undefined ||
+      !nodes[selectedIndex]
+    ) {
+      return undefined;
+    }
+
+    const selectedNode = nodes[selectedIndex];
+    const averageX = xScale(seriesAverage);
+    const routeY = Math.min(
+      gridBottom - 8,
+      Math.max(...nodes.map(node => node.y)) + pointRadius + 7,
+    );
+
+    return {
+      path: `M ${averageX} ${routeY} H ${selectedNode.x} V ${selectedNode.y}`,
+      labelX: (averageX + selectedNode.x) / 2,
+      labelY: routeY + 13,
+    };
+  });
 
   function calculateLayout(grouped, currentXScale, currentYScale) {
     const layoutNodes = data.map((datum, index) => ({
@@ -74,7 +114,11 @@
       .force(
         'y',
         forceY()
-          .y(d => (grouped ? currentYScale(d.season) : innerHeight / 2))
+          .y(d =>
+            grouped
+              ? currentYScale(d.season) + currentYScale.bandwidth() / 2
+              : innerHeight / 2,
+          )
           .strength(0.5),
       )
       .force('collide', forceCollide().radius(collisionRadius))
@@ -90,6 +134,7 @@
       nodes: targetNodes,
       gridTop: targetGridTop,
       gridBottom: targetGridBottom,
+      chartHeight: targetChartHeight,
       viewIndicatorPosition: targetViewIndicatorPosition,
     } = targetLayout;
 
@@ -97,6 +142,7 @@
       nodes = targetNodes;
       gridTop = targetGridTop;
       gridBottom = targetGridBottom;
+      chartHeight = targetChartHeight;
       viewIndicatorPosition = targetViewIndicatorPosition;
       return;
     }
@@ -104,6 +150,7 @@
     const startNodes = nodes.map(node => ({ x: node.x, y: node.y }));
     const startGridTop = gridTop;
     const startGridBottom = gridBottom;
+    const startChartHeight = chartHeight;
     const startViewIndicatorPosition = viewIndicatorPosition;
     const startTime = performance.now();
 
@@ -123,6 +170,9 @@
       gridTop = startGridTop + (targetGridTop - startGridTop) * easedProgress;
       gridBottom =
         startGridBottom + (targetGridBottom - startGridBottom) * easedProgress;
+      chartHeight =
+        startChartHeight +
+        (targetChartHeight - startChartHeight) * easedProgress;
       viewIndicatorPosition =
         startViewIndicatorPosition +
         (targetViewIndicatorPosition - startViewIndicatorPosition) *
@@ -139,7 +189,7 @@
     const pointerX =
       ((event.clientX - bounds.left) / bounds.width) * innerWidth;
     const pointerY =
-      ((event.clientY - bounds.top) / bounds.height) * innerHeight;
+      ((event.clientY - bounds.top) / bounds.height) * interactionHeight;
     let nearestIndex;
     let nearestDistanceSquared = INTERACTION.hitRadius ** 2;
 
@@ -161,6 +211,20 @@
 
   function handleChartClick(event) {
     selectedIndex = findNearestNode(event);
+  }
+
+  function formatRatingDifference(rating) {
+    const difference = rating - seriesAverage;
+    const sign = difference > 0 ? '+' : difference < 0 ? '−' : '';
+    return `${sign}${Math.abs(difference).toFixed(1)} stars`;
+  }
+
+  function describeRatingDifference(rating) {
+    const difference = rating - seriesAverage;
+    if (difference === 0) return 'matches the series average';
+    return `${Math.abs(difference).toFixed(1)} stars ${
+      difference > 0 ? 'above' : 'below'
+    } the series average`;
   }
 
   function handleChartKeydown(event) {
@@ -201,22 +265,38 @@
 
     const combinedYValues = combinedNodes.map(node => node.y);
     const groupedYValues = groupedNodes.map(node => node.y);
+    const combinedGridBottom = Math.min(
+      innerHeight,
+      Math.max(...combinedYValues) + MOTION.gridPadding,
+    );
+    const groupedGridBottom = Math.min(
+      innerHeight,
+      Math.max(...groupedYValues) + 56,
+    );
 
     layouts = {
       combined: {
         nodes: combinedNodes,
         viewIndicatorPosition: 0,
         gridTop: Math.max(0, Math.min(...combinedYValues) - MOTION.gridPadding),
-        gridBottom: Math.min(
-          innerHeight,
-          Math.max(...combinedYValues) + MOTION.gridPadding,
+        gridBottom: combinedGridBottom,
+        chartHeight: Math.min(
+          expandedChartHeight,
+          Math.max(
+            LAYOUT.minimumCombinedHeight,
+            margin.top +
+              combinedGridBottom +
+              LAYOUT.sourceOffset +
+              LAYOUT.chartEndPadding,
+          ),
         ),
       },
       grouped: {
         nodes: groupedNodes,
         viewIndicatorPosition: 1,
         gridTop: Math.max(0, Math.min(...groupedYValues) - MOTION.gridPadding),
-        gridBottom: Math.min(innerHeight, Math.max(...groupedYValues) + 56),
+        gridBottom: groupedGridBottom,
+        chartHeight: expandedChartHeight,
       },
     };
   });
@@ -254,9 +334,12 @@
   onDestroy(() => cancelAnimationFrame(animationFrame));
 </script>
 
-<main class="project">
-  <h2>Average episode ratings for the series Frasier</h2>
-  <div class="view-controls" aria-label="Chart view">
+<main
+  class="project"
+  style:--feedback-duration="{MOTION.feedbackDuration}ms"
+>
+  <h1 id="chart-title">Average episode ratings for the series Frasier</h1>
+  <div class="view-controls" role="group" aria-label="Chart view">
     <span
       class="view-indicator"
       aria-hidden="true"
@@ -275,44 +358,108 @@
       onclick={() => (groupBySeason = true)}>By season</button
     >
   </div>
-  <p class="instructions">
+  <p class="instructions" id="chart-instructions">
     Hover or tap a point for episode details. After selecting a point, use the
     arrow keys to cycle through episodes chronologically.
   </p>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    role="application"
+    role="region"
     tabindex="0"
     class="chart-container"
-    aria-label="Episode ratings chart. Use arrow keys to explore episodes."
+    aria-labelledby="chart-title"
+    aria-describedby="chart-instructions"
     bind:clientWidth={width}
     onfocus={() => (hoveredIndex = undefined)}
     onkeydown={handleChartKeydown}
   >
-    <svg {width} {height}>
+    <svg {width} height={chartHeight} aria-hidden="true" focusable="false">
       <g class="inner-chart" transform="translate({margin.left}, {margin.top})">
-        <AxisY {yScale} {groupBySeason} />
-        <AxisX {xScale} {gridTop} {gridBottom} />
+        <AxisY
+          {yScale}
+          {groupBySeason}
+          motionDuration={prefersReducedMotion ? 0 : MOTION.duration}
+        />
+        <AxisX
+          {xScale}
+          {gridTop}
+          {gridBottom}
+          {seriesAverage}
+        />
+        {#if selectedIndex !== undefined && nodes[selectedIndex]}
+          {#key `${selectedIndex}-${groupBySeason}`}
+            {#if comparisonRoute}
+              <path
+                class="selection-comparison-line elbow"
+                d={comparisonRoute.path}
+                in:draw={{
+                  duration: prefersReducedMotion
+                    ? 0
+                    : MOTION.comparisonDuration,
+                  easing: cubicOut,
+                }}
+              />
+            {:else}
+              <line
+                class="selection-comparison-line"
+                x1={xScale(seriesAverage)}
+                x2={nodes[selectedIndex].x}
+                y1={nodes[selectedIndex].y}
+                y2={nodes[selectedIndex].y}
+                in:draw={{
+                  duration: prefersReducedMotion
+                    ? 0
+                    : MOTION.comparisonDuration,
+                  easing: cubicOut,
+                }}
+              />
+            {/if}
+          {/key}
+        {/if}
         {#each nodes as node, i (node.layoutIndex)}
           <circle
             class="data-point"
-            aria-hidden="true"
+            class:hovered={hoveredIndex === i}
+            class:selected={selectedIndex === i}
             cx={node.x}
             cy={node.y}
             r={pointRadius}
-            fill={activeIndex === i ? 'orange' : '#f4f4f4'}
-            stroke={'#555'}
-            stroke-width={0.5}
           />
         {/each}
+        {#if selectedIndex !== undefined && nodes[selectedIndex]}
+          <circle
+            class="selection-ring"
+            cx={nodes[selectedIndex].x}
+            cy={nodes[selectedIndex].y}
+            r={pointRadius + 4}
+          />
+          {#key selectedIndex}
+            <text
+              class="selection-comparison-label"
+              x={comparisonRoute?.labelX ??
+                (xScale(seriesAverage) + nodes[selectedIndex].x) / 2}
+              y={comparisonRoute?.labelY ??
+                nodes[selectedIndex].y - pointRadius - 7}
+              in:fade={{
+                duration: prefersReducedMotion
+                  ? 0
+                  : MOTION.comparisonDuration,
+                easing: cubicOut,
+              }}
+              >{formatRatingDifference(
+                nodes[selectedIndex].averageEpisodeRating,
+              )}</text
+            >
+          {/key}
+        {/if}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <rect
           class="interaction-layer"
           class:near-point={hoveredIndex !== undefined}
           width={innerWidth}
-          height={innerHeight}
+          height={interactionHeight}
           onpointermove={handlePointerMove}
           onpointerleave={() => (hoveredIndex = undefined)}
           onclick={handleChartClick}
@@ -326,12 +473,23 @@
         x={nodes[activeIndex].x + margin.left}
         y={nodes[activeIndex].y + margin.top}
         chartWidth={width}
-        chartHeight={height}
+        {chartHeight}
+        {seriesAverage}
       />
     {/if}
+    <p class="sr-only" role="status">
+      {#if selectedIndex !== undefined && nodes[selectedIndex]}
+        Season {nodes[selectedIndex].season}, episode
+        {nodes[selectedIndex].episode}: {nodes[selectedIndex].title},
+        {nodes[selectedIndex].averageEpisodeRating} out of 10,
+        {describeRatingDifference(
+          nodes[selectedIndex].averageEpisodeRating,
+        )}.
+      {/if}
+    </p>
     <p
       class="source"
-      style="top:{gridBottom + margin.top + 22}px; left:{margin.left}px;"
+      style="top:{gridBottom + margin.top + LAYOUT.sourceOffset}px; left:{margin.left}px;"
     >
       Source: IMDb
     </p>
@@ -340,6 +498,11 @@
 
 <style>
   .project {
+    --color-accent: oklch(0.72 0.17 55);
+    --color-accent-soft: oklch(0.92 0.05 70);
+    --color-accent-strong: oklch(0.56 0.16 50);
+    --color-point: oklch(0.965 0 0);
+    --color-point-stroke: oklch(0.45 0 0);
     width: min(100%, 800px);
     margin-inline: auto;
   }
@@ -355,7 +518,7 @@
     -moz-user-select: none;
   }
 
-  h2 {
+  h1 {
     margin-bottom: 0.5rem;
     font-size: 1.5rem;
     font-weight: 600;
@@ -387,7 +550,7 @@
   .view-controls button {
     position: relative;
     z-index: 1;
-    min-height: 2rem;
+    min-height: 2.75rem;
     padding: 0.25rem 0.625rem;
     border: 0;
     border-radius: 0.375rem;
@@ -404,14 +567,14 @@
 
   .view-controls button:focus-visible,
   .chart-container:focus-visible {
-    outline: 2px solid #d56700;
+    outline: 2px solid;
     outline-offset: 2px;
   }
 
   .instructions {
     margin-top: 0.625rem;
     margin-bottom: 0.75rem;
-    color: #8a8a8a;
+    color: oklch(0.45 0 0);
     font-size: 0.875rem;
     line-height: 1.4;
   }
@@ -419,12 +582,57 @@
   .source {
     position: absolute;
     margin: 0;
+    color: oklch(0.45 0 0);
   }
 
   .data-point {
-    transition:
-      stroke 100ms ease-out,
-      opacity 100ms ease-out;
+    fill: var(--color-point);
+    stroke: var(--color-point-stroke);
+    stroke-width: 0.5;
+    pointer-events: none;
+  }
+
+  .data-point.hovered {
+    fill: var(--color-accent-soft);
+    stroke: var(--color-accent-strong);
+    stroke-width: 1;
+  }
+
+  .data-point.selected {
+    fill: var(--color-accent);
+    stroke: var(--color-accent-strong);
+    stroke-width: 1.5;
+  }
+
+  .selection-ring {
+    fill: none;
+    stroke: var(--color-accent-strong);
+    stroke-width: 1.5;
+    pointer-events: none;
+  }
+
+  .selection-comparison-line {
+    fill: none;
+    stroke: var(--color-accent-strong);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  .selection-comparison-line.elbow {
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+    opacity: 0.55;
+  }
+
+  .selection-comparison-label {
+    fill: var(--color-accent-strong);
+    stroke: white;
+    stroke-width: 3;
+    paint-order: stroke;
+    font-weight: 600;
+    text-anchor: middle;
     pointer-events: none;
   }
 
@@ -435,5 +643,27 @@
 
   .interaction-layer.near-point {
     cursor: pointer;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .data-point {
+      transition:
+        fill var(--feedback-duration) ease,
+        stroke var(--feedback-duration) ease,
+        stroke-width var(--feedback-duration) ease;
+    }
   }
 </style>
