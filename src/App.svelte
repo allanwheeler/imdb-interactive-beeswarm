@@ -372,7 +372,13 @@
           {groupBySeason}
           motionDuration={prefersReducedMotion ? 0 : MOTION.duration}
         />
-        <AxisX {xScale} {gridTop} {gridBottom} {seriesAverage} />
+        <AxisX
+          {xScale}
+          {gridTop}
+          {gridBottom}
+          {seriesAverage}
+          referenceTop={-margin.top}
+        />
         {#each nodes as node, i (node.layoutIndex)}
           <circle
             class="data-point"

@@ -1,6 +1,6 @@
 <script>
-  /** @type {{xScale: any, gridTop: number, gridBottom: number, seriesAverage: number}} */
-  let { xScale, gridTop, gridBottom, seriesAverage } = $props();
+  /** @type {{xScale: any, gridTop: number, gridBottom: number, seriesAverage: number, referenceTop: number}} */
+  let { xScale, gridTop, gridBottom, seriesAverage, referenceTop } = $props();
 
   let ticks = $derived(xScale.ticks(4));
 </script>
@@ -13,8 +13,11 @@
     </g>
   {/each}
   <g class="average" transform="translate({xScale(seriesAverage)}, 0)">
-    <line x1="0" x2="0" y1={gridTop} y2={gridBottom} />
-    <text x="5" y={gridTop - 8}>Series average · {seriesAverage}</text>
+    <line x1="0" x2="0" y1={referenceTop} y2={gridBottom} />
+    <text x="5" y={gridTop - 12}>
+      <tspan x="5">Series average</tspan>
+      <tspan x="5" dy="1.1em">{seriesAverage}</tspan>
+    </text>
   </g>
 </g>
 
