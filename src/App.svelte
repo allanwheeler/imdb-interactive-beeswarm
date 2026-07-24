@@ -373,34 +373,18 @@
           motionDuration={prefersReducedMotion ? 0 : MOTION.duration}
         />
         <AxisX {xScale} {gridTop} {gridBottom} {seriesAverage} />
-        {#if selectedIndex !== undefined && nodes[selectedIndex]}
+        {#if comparisonRoute}
           {#key `${selectedIndex}-${groupBySeason}`}
-            {#if comparisonRoute}
-              <path
-                class="selection-comparison-line"
-                d={comparisonRoute.path}
-                in:draw={{
-                  duration: prefersReducedMotion
-                    ? 0
-                    : MOTION.comparisonDuration,
-                  easing: cubicOut,
-                }}
-              />
-            {:else}
-              <line
-                class="selection-comparison-line"
-                x1={xScale(seriesAverage)}
-                x2={nodes[selectedIndex].x}
-                y1={nodes[selectedIndex].y}
-                y2={nodes[selectedIndex].y}
-                in:draw={{
-                  duration: prefersReducedMotion
-                    ? 0
-                    : MOTION.comparisonDuration,
-                  easing: cubicOut,
-                }}
-              />
-            {/if}
+            <path
+              class="selection-comparison-line"
+              d={comparisonRoute.path}
+              in:draw={{
+                duration: prefersReducedMotion
+                  ? 0
+                  : MOTION.comparisonDuration,
+                easing: cubicOut,
+              }}
+            />
           {/key}
         {/if}
         {#each nodes as node, i (node.layoutIndex)}
@@ -413,6 +397,27 @@
             r={pointRadius}
           />
         {/each}
+        {#if
+          groupBySeason &&
+          selectedIndex !== undefined &&
+          nodes[selectedIndex]
+        }
+          {#key `${selectedIndex}-${groupBySeason}`}
+            <line
+              class="selection-comparison-line"
+              x1={xScale(seriesAverage)}
+              x2={nodes[selectedIndex].x}
+              y1={nodes[selectedIndex].y}
+              y2={nodes[selectedIndex].y}
+              in:draw={{
+                duration: prefersReducedMotion
+                  ? 0
+                  : MOTION.comparisonDuration,
+                easing: cubicOut,
+              }}
+            />
+          {/key}
+        {/if}
         {#if selectedIndex !== undefined && nodes[selectedIndex]}
           <circle
             class="selection-ring"
