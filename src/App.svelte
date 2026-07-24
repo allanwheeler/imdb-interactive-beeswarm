@@ -44,6 +44,7 @@
   const INTERACTION = {
     hitRadius: 24,
   };
+  const SEARCH_RESULT_LIMIT = 5;
 
   let innerWidth = $derived(width - margin.left - margin.right);
   let innerHeight = $derived(expandedChartHeight - margin.top - margin.bottom);
@@ -64,7 +65,45 @@
   let layouts = $state();
   let hoveredIndex = $state();
   let selectedIndex = $state();
+  let searchQuery = $state('');
+  let isSearchOpen = $state(false);
+  let activeSuggestionIndex = $state(0);
+  let searchInput;
   let activeIndex = $derived(hoveredIndex ?? selectedIndex);
+  let normalizedSearchQuery = $derived(searchQuery.trim().toLocaleLowerCase());
+  let matchingEpisodes = $derived.by(() => {
+    if (!normalizedSearchQuery) return [];
+
+    return data
+      .map((episode, index) => ({ ...episode, index }))
+      .filter(episode =>
+        episode.title.toLocaleLowerCase().includes(normalizedSearchQuery),
+      );
+  });
+  let episodeSuggestions = $derived(
+    matchingEpisodes.slice(0, SEARCH_RESULT_LIMIT),
+  );
+  let activeSuggestionId = $derived(
+    isSearchOpen && episodeSuggestions[activeSuggestionIndex]
+      ? `episode-search-option-${episodeSuggestions[activeSuggestionIndex].index}`
+      : undefined,
+  );
+  let searchAnnouncement = $derived.by(() => {
+    if (!isSearchOpen || !normalizedSearchQuery) return '';
+
+    if (matchingEpisodes.length === 0) {
+      return `No episodes match ${searchQuery.trim()}.`;
+    }
+
+    const resultCount = episodeSuggestions.length;
+    const resultLabel = resultCount === 1 ? 'suggestion' : 'suggestions';
+    const shownLabel =
+      matchingEpisodes.length > SEARCH_RESULT_LIMIT
+        ? `${resultCount} of ${matchingEpisodes.length}`
+        : `${resultCount}`;
+
+    return `${shownLabel} ${resultLabel} available. Use the up and down arrow keys to review them.`;
+  });
   let animationFrame;
   let prefersReducedMotion = $state(false);
   let interactionHeight = $derived(
@@ -207,6 +246,82 @@
     selectedIndex = findNearestNode(event);
   }
 
+  function handleSearchInput(event) {
+    searchQuery = event.currentTarget.value;
+    activeSuggestionIndex = 0;
+    isSearchOpen = searchQuery.trim().length > 0;
+  }
+
+  function handleSearchFocus() {
+    if (normalizedSearchQuery) isSearchOpen = true;
+  }
+
+  function handleSearchBlur(event) {
+    const search = event.currentTarget.closest('.episode-search');
+    if (!search?.contains(event.relatedTarget)) isSearchOpen = false;
+  }
+
+  function selectEpisodeSuggestion(suggestion) {
+    hoveredIndex = undefined;
+    selectedIndex = suggestion.index;
+    searchQuery = suggestion.title;
+    activeSuggestionIndex = 0;
+    isSearchOpen = false;
+    searchInput?.focus();
+  }
+
+  function clearSearch() {
+    searchQuery = '';
+    activeSuggestionIndex = 0;
+    isSearchOpen = false;
+    searchInput?.focus();
+  }
+
+  function handleSearchKeydown(event) {
+    const suggestionCount = episodeSuggestions.length;
+
+    if (event.key === 'ArrowDown') {
+      if (suggestionCount === 0) return;
+      event.preventDefault();
+
+      if (!isSearchOpen) {
+        isSearchOpen = true;
+        activeSuggestionIndex = 0;
+      } else {
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % suggestionCount;
+      }
+    } else if (event.key === 'ArrowUp') {
+      if (suggestionCount === 0) return;
+      event.preventDefault();
+
+      if (!isSearchOpen) {
+        isSearchOpen = true;
+        activeSuggestionIndex = suggestionCount - 1;
+      } else {
+        activeSuggestionIndex =
+          (activeSuggestionIndex - 1 + suggestionCount) % suggestionCount;
+      }
+    } else if (event.key === 'Home' && isSearchOpen && suggestionCount > 0) {
+      event.preventDefault();
+      activeSuggestionIndex = 0;
+    } else if (event.key === 'End' && isSearchOpen && suggestionCount > 0) {
+      event.preventDefault();
+      activeSuggestionIndex = suggestionCount - 1;
+    } else if (
+      event.key === 'Enter' &&
+      isSearchOpen &&
+      episodeSuggestions[activeSuggestionIndex]
+    ) {
+      event.preventDefault();
+      selectEpisodeSuggestion(episodeSuggestions[activeSuggestionIndex]);
+    } else if (event.key === 'Escape' && isSearchOpen) {
+      event.preventDefault();
+      isSearchOpen = false;
+    } else if (event.key === 'Tab') {
+      isSearchOpen = false;
+    }
+  }
+
   function formatRatingDifference(rating) {
     const difference = rating - seriesAverage;
     const sign = difference > 0 ? '+' : difference < 0 ? '−' : '';
@@ -330,24 +445,108 @@
 
 <main class="project" style:--feedback-duration="{MOTION.feedbackDuration}ms">
   <h1 id="chart-title">Average episode ratings for the series Frasier</h1>
-  <div class="view-controls" role="group" aria-label="Chart view">
-    <span
-      class="view-indicator"
-      aria-hidden="true"
-      style:transform="translateX({viewIndicatorPosition * 100}%)"
-    ></span>
-    <button
-      type="button"
-      class:active={!groupBySeason}
-      aria-pressed={!groupBySeason}
-      onclick={() => (groupBySeason = false)}>All episodes</button
-    >
-    <button
-      type="button"
-      class:active={groupBySeason}
-      aria-pressed={groupBySeason}
-      onclick={() => (groupBySeason = true)}>By season</button
-    >
+  <div class="control-bar">
+    <div class="episode-search">
+      <label class="sr-only" for="episode-search-input">Find an episode</label>
+      <div class="search-input-shell">
+        <svg
+          class="search-icon"
+          viewBox="0 0 20 20"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="8.5" cy="8.5" r="5.5"></circle>
+          <path d="m12.5 12.5 4.5 4.5"></path>
+        </svg>
+        <input
+          id="episode-search-input"
+          class="search-input"
+          type="search"
+          name="episode-search"
+          placeholder="Search episode titles"
+          autocomplete="off"
+          spellcheck="false"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={isSearchOpen}
+          aria-controls="episode-search-listbox"
+          aria-activedescendant={activeSuggestionId}
+          aria-describedby="episode-search-status"
+          value={searchQuery}
+          bind:this={searchInput}
+          oninput={handleSearchInput}
+          onfocus={handleSearchFocus}
+          onblur={handleSearchBlur}
+          onkeydown={handleSearchKeydown}
+        />
+        {#if searchQuery}
+          <button
+            class="search-clear"
+            type="button"
+            aria-label="Clear search"
+            onclick={clearSearch}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        {/if}
+      </div>
+      {#if isSearchOpen && normalizedSearchQuery}
+        <ul
+          class="search-results"
+          id="episode-search-listbox"
+          role="listbox"
+          aria-label="Episode suggestions"
+        >
+          {#each episodeSuggestions as suggestion, index (suggestion.index)}
+            <li role="presentation">
+              <button
+                id="episode-search-option-{suggestion.index}"
+                class="search-result"
+                class:active={index === activeSuggestionIndex}
+                type="button"
+                role="option"
+                tabindex="-1"
+                aria-selected={selectedIndex === suggestion.index}
+                onpointerenter={() => (activeSuggestionIndex = index)}
+                onclick={() => selectEpisodeSuggestion(suggestion)}
+              >
+                <span class="search-result-title">{suggestion.title}</span>
+                <span class="search-result-meta"
+                  >Season {suggestion.season}, episode
+                  {suggestion.episode}</span
+                >
+              </button>
+            </li>
+          {:else}
+            <li class="search-empty" role="presentation">
+              No episodes match “{searchQuery.trim()}”.
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      <p class="sr-only" id="episode-search-status" aria-live="polite">
+        {searchAnnouncement}
+      </p>
+    </div>
+    <div class="view-controls" role="group" aria-label="Chart view">
+      <span
+        class="view-indicator"
+        aria-hidden="true"
+        style:transform="translateX({viewIndicatorPosition * 100}%)"
+      ></span>
+      <button
+        type="button"
+        class:active={!groupBySeason}
+        aria-pressed={!groupBySeason}
+        onclick={() => (groupBySeason = false)}>All episodes</button
+      >
+      <button
+        type="button"
+        class:active={groupBySeason}
+        aria-pressed={groupBySeason}
+        onclick={() => (groupBySeason = true)}>By season</button
+      >
+    </div>
   </div>
   <p class="instructions" id="chart-instructions">
     Hover or tap a point for episode details. After selecting a point, use the
@@ -395,19 +594,13 @@
               class="selection-comparison-line"
               d={comparisonRoute.path}
               in:draw={{
-                duration: prefersReducedMotion
-                  ? 0
-                  : MOTION.comparisonDuration,
+                duration: prefersReducedMotion ? 0 : MOTION.comparisonDuration,
                 easing: cubicOut,
               }}
             />
           {/key}
         {/if}
-        {#if
-          groupBySeason &&
-          selectedIndex !== undefined &&
-          nodes[selectedIndex]
-        }
+        {#if groupBySeason && selectedIndex !== undefined && nodes[selectedIndex]}
           {#key `${selectedIndex}-${groupBySeason}`}
             <line
               class="selection-comparison-line"
@@ -416,9 +609,7 @@
               y1={nodes[selectedIndex].y}
               y2={nodes[selectedIndex].y}
               in:draw={{
-                duration: prefersReducedMotion
-                  ? 0
-                  : MOTION.comparisonDuration,
+                duration: prefersReducedMotion ? 0 : MOTION.comparisonDuration,
                 easing: cubicOut,
               }}
             />
@@ -498,7 +689,7 @@
     --color-accent-strong: oklch(0.56 0.16 50);
     --color-point: oklch(0.965 0 0);
     --color-point-stroke: oklch(0.45 0 0);
-    width: min(100%, 800px);
+    width: min(100%, 700px);
     margin-inline: auto;
   }
 
@@ -519,11 +710,19 @@
     font-weight: 600;
   }
 
+  .control-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    margin-top: 0.75rem;
+  }
+
   .view-controls {
     position: relative;
     display: inline-grid;
     grid-template-columns: repeat(2, 1fr);
-    margin-top: 0.75rem;
     padding: 2px;
     border: 1px solid rgb(200, 200, 200, 0.1);
     border-radius: 0.5rem;
@@ -560,7 +759,130 @@
     color: #111;
   }
 
+  .episode-search {
+    position: relative;
+    flex: 1 1 17rem;
+    width: min(100%, 22rem);
+    max-width: 22rem;
+  }
+
+  .search-input-shell {
+    position: relative;
+  }
+
+  .search-icon {
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 50%;
+    inset-inline-start: 0.75rem;
+    width: 1rem;
+    height: 1rem;
+    color: oklch(0.45 0 0);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .search-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.4375rem 2.75rem 0.4375rem 2.375rem;
+    border: 1px solid oklch(0.76 0 0);
+    border-radius: 0.5rem;
+    color: #111;
+    background: #fff;
+    font: inherit;
+    font-size: 1rem;
+  }
+
+  .search-input::placeholder {
+    color: oklch(0.5 0 0);
+  }
+
+  .search-input::-webkit-search-cancel-button {
+    appearance: none;
+  }
+
+  .search-clear {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    width: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.375rem;
+    color: oklch(0.4 0 0);
+    background: transparent;
+    font: inherit;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .search-results {
+    position: absolute;
+    z-index: 10;
+    inset: calc(100% + 0.25rem) 0 auto;
+    max-height: min(18rem, 50vh);
+    margin: 0;
+    padding: 0.25rem;
+    overflow-y: auto;
+    border: 1px solid oklch(0.82 0 0);
+    border-radius: 0.625rem;
+    background: #fff;
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 8%),
+      0 8px 24px oklch(0 0 0 / 10%);
+    list-style: none;
+  }
+
+  .search-result {
+    display: grid;
+    width: 100%;
+    gap: 0.125rem;
+    padding: 0.5rem 0.625rem;
+    border: 0;
+    border-radius: 0.375rem;
+    color: #222;
+    background: transparent;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .search-result.active {
+    background: var(--color-accent-soft);
+  }
+
+  .search-result[aria-selected='true'] .search-result-title {
+    color: var(--color-accent-strong);
+    font-weight: 600;
+  }
+
+  .search-result-title {
+    overflow-wrap: break-word;
+    font-size: 0.875rem;
+    line-height: 1.25;
+  }
+
+  .search-result-meta,
+  .search-empty {
+    color: oklch(0.45 0 0);
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  .search-empty {
+    padding: 0.625rem;
+  }
+
   .view-controls button:focus-visible,
+  .search-input:focus-visible,
+  .search-clear:focus-visible,
   .chart-container:focus-visible {
     outline: 2px solid;
     outline-offset: 2px;
@@ -655,6 +977,12 @@
         fill var(--feedback-duration) ease,
         stroke var(--feedback-duration) ease,
         stroke-width var(--feedback-duration) ease;
+    }
+  }
+
+  @media (min-width: 30rem) {
+    .search-input {
+      font-size: 0.875rem;
     }
   }
 </style>
