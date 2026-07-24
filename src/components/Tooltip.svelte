@@ -1,6 +1,6 @@
 <script>
-	/** @type {{data: any, x: number, y: number, chartWidth: number, chartHeight: number}} */
-	let { data, x, y, chartWidth, chartHeight } = $props();
+	/** @type {{data: any, x: number, y: number, chartWidth: number, chartHeight: number, seriesAverage: number}} */
+	let { data, x, y, chartWidth, chartHeight, seriesAverage } = $props();
 
 	let tooltipWidth = $state(220);
 	let tooltipHeight = $state(56);
@@ -23,15 +23,23 @@
 
 <div
 	class="tooltip"
-	role="status"
-	aria-live="polite"
+	aria-hidden="true"
 	style="left:{xPosition}px; top:{yPosition}px;"
 	bind:clientWidth={tooltipWidth}
 	bind:clientHeight={tooltipHeight}
 >
 	<h1>S{data.season} E{data.episode}: {data.title}</h1>
 	<div class="rating">
-		{data.averageEpisodeRating}/10 stars
+		<strong>{data.averageEpisodeRating}</strong> out of 10
+	</div>
+	<div class="comparison">
+		{#if data.averageEpisodeRating > seriesAverage}
+			{(data.averageEpisodeRating - seriesAverage).toFixed(1)} above the series average
+		{:else if data.averageEpisodeRating < seriesAverage}
+			{(seriesAverage - data.averageEpisodeRating).toFixed(1)} below the series average
+		{:else}
+			Matches the series average
+		{/if}
 	</div>
 </div>
 
@@ -60,6 +68,13 @@
 	.rating {
 		margin-top: 0.125rem;
 		font-size: 0.75rem;
+		line-height: 1.3;
+	}
+
+	.comparison {
+		margin-top: 0.1875rem;
+		color: oklch(0.45 0 0);
+		font-size: 0.6875rem;
 		line-height: 1.3;
 	}
 </style>
